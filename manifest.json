@@ -37,7 +37,7 @@
 					"fr": "Choisissez un chemin pour Wallabag Kindle Consumer web interface"
 				},
 				"example": "/example",
-				"default": "/wallabag-kindle-consumer"
+				"default": "/wbg-kindle-consumer"
 			},
 			{
 				"name": "wallabag_domain",
