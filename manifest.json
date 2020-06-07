@@ -26,7 +26,8 @@
 				"ask": {
 					"en": "Choose a domain name for Wallabag Kindle Consumer web interface"
 				},
-				"example": "example.com"
+				"example": "example.com",
+				"default": "yuno.virtual"
 			},
 			{
 				"name": "path",
@@ -44,7 +45,8 @@
 				"ask": {
 					"en": "Where an existing wallabag install is located"
 				},
-				"example": "wallabag.example.com"
+				"example": "wallabag.example.com",
+				"default": "yuno.virtual"
 			},
 			{
 				"name": "wallabag_path",
@@ -53,7 +55,7 @@
 					"en": "Choose the path where the wallabag install is located"
 				},
 				"example": "/example",
-				"default": "/"
+				"default": "/wallabag"
 			},
 			{
 				"name": "client_id",
