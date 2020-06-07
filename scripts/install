@@ -26,10 +26,7 @@ ynh_abort_if_errors
 
 domain=$YNH_APP_ARG_DOMAIN
 path_url=$YNH_APP_ARG_PATH
-admin=$YNH_APP_ARG_ADMIN
 is_public=$YNH_APP_ARG_IS_PUBLIC
-language=$YNH_APP_ARG_LANGUAGE
-password=$YNH_APP_ARG_PASSWORD
 
 ### If it's a multi-instance app, meaning it can be installed several times independently
 ### The id of the app as stated in the manifest is available as $YNH_APP_ID
@@ -58,7 +55,7 @@ ynh_script_progression --message="Validating installation parameters..." --time 
 
 ### If the app uses nginx as web server (written in HTML/PHP in most cases), the final path should be "/var/www/$app".
 ### If the app provides an internal web server (or uses another application server such as uwsgi), the final path should be "/opt/yunohost/$app"
-final_path=/var/www/$app
+final_path=/opt/yunohost/$app
 test ! -e "$final_path" || ynh_die --message="This path already contains a folder"
 
 # Register (book) web path
@@ -73,7 +70,10 @@ ynh_app_setting_set --app=$app --key=domain --value=$domain
 ynh_app_setting_set --app=$app --key=path --value=$path_url
 ynh_app_setting_set --app=$app --key=admin --value=$admin
 ynh_app_setting_set --app=$app --key=is_public --value=$is_public
-ynh_app_setting_set --app=$app --key=language --value=$language
+ynh_app_setting_set --app=$app --key=wallabag_domain --value=$wallabag_domain
+ynh_app_setting_set --app=$app --key=wallabag_path --value=$wallabag_path
+ynh_app_setting_set --app=$app --key=client_id --value=$client_id
+ynh_app_setting_set --app=$app --key=client_secret --value=$client_secret
 
 #=================================================
 # STANDARD MODIFICATIONS
@@ -112,6 +112,8 @@ ynh_script_progression --message="Installing dependencies..." --time --weight=1
 ###		- And the section "UPGRADE DEPENDENCIES" in the upgrade script
 
 ynh_install_app_dependencies $pkg_dependencies
+
+pip3 install --root "$final_path" -r "$final_path/requirements.txt"
 
 #=================================================
 # CREATE A MYSQL DATABASE
@@ -164,28 +166,9 @@ ynh_script_progression --message="Configuring system user..." --time --weight=1
 ynh_system_user_create --username=$app
 
 #=================================================
-# PHP-FPM CONFIGURATION
-#=================================================
-ynh_script_progression --message="Configuring php-fpm..." --time --weight=1
-
-### `ynh_add_fpm_config` is used to set up a PHP config.
-### You can remove it if your app doesn't use PHP.
-### `ynh_add_fpm_config` will use the files conf/php-fpm.conf
-### If you're not using these lines:
-###		- You can remove these files in conf/.
-###		- Remove the section "BACKUP THE PHP-FPM CONFIGURATION" in the backup script
-###		- Remove also the section "REMOVE PHP-FPM CONFIGURATION" in the remove script
-###		- As well as the section "RESTORE THE PHP-FPM CONFIGURATION" in the restore script
-###		With the reload at the end of the script.
-###		- And the section "PHP-FPM CONFIGURATION" in the upgrade script
-
-# Create a dedicated php-fpm config
-ynh_add_fpm_config
-
-#=================================================
 # SPECIFIC SETUP
 #=================================================
-# ...
+
 #=================================================
 
 #=================================================
@@ -207,36 +190,6 @@ ynh_script_progression --message="Configuring a systemd service..." --time --wei
 # Create a dedicated systemd config
 ynh_add_systemd_config
 
-#=================================================
-# SETUP APPLICATION WITH CURL
-#=================================================
-
-### Use these lines only if the app installation needs to be finalized through
-### web forms. We generally don't want to ask the final user,
-### so we're going to use curl to automatically fill the fields and submit the
-### forms.
-
-# Set right permissions for curl install
-chown -R $app: $final_path
-
-# Set the app as temporarily public for curl call
-ynh_script_progression --message="Configuring SSOwat..." --time --weight=1
-ynh_app_setting_set --app=$app --key=skipped_uris --value="/"
-# Reload SSOwat config
-yunohost app ssowatconf
-
-# Reload Nginx
-ynh_systemd_action --service_name=nginx --action=reload
-
-# Installation with curl
-ynh_script_progression --message="Finalizing installation..." --time --weight=1
-ynh_local_curl "/INSTALL_PATH" "key1=value1" "key2=value2" "key3=value3"
-
-# Remove the public access
-if [ $is_public -eq 0 ]
-then
-	ynh_app_setting_delete --app=$app --key=skipped_uris
-fi
 
 #=================================================
 # MODIFY A CONFIG FILE
@@ -245,7 +198,25 @@ fi
 ### `ynh_replace_string` is used to replace a string in a file.
 ### (It's compatible with sed regular expressions syntax)
 
-ynh_replace_string --match_string="match_string" --replace_string="replace_string" --target_file="$final_path/CONFIG_FILE"
+cp "$final_path/config.example.ini" "$final_path/config.ini"
+cf="$final_path/config.ini"
+
+ynh_replace_string --match_string="sqlite:///database.db" --replace_string="mysql://localhost/$db_name" --target_file="$cf"
+
+ynh_replace_string --match_string="https://wallabag.myserver.org" --replace_string="$wallabag_domain/$wallabag_path" --target_file="$cf"
+
+ynh_replace_string --match_string="1_3o53gl30vhgk0c8ks4cocww08o84448osgo40wgw4gwkoo8skc" --replace_string="$client_id" --target_file="$cf"
+
+ynh_replace_string --match_string="636ocbqo978ckw0gsw4gcwwocg8044sco0w8w84cws48ggogs4" --replace_string="$client_secret" --target_file="$cf"
+
+ynh_replace_string --match_string="https://consumer.myserver.org" --replace_string="$domain" --target_file="$cf"
+
+mail=$(ynh_user_get_info "$admin" 'mail')
+
+ynh_replace_string --match_string="wallabag@myserver.org" --replace_string="$mail" --target_file="$cf"
+ynh_replace_string --match_string="myserver.org" --replace_string="localhost" --target_file="$cf"
+ynh_replace_string --match_string="mail_user" --replace_string="" --target_file="$cf"
+ynh_replace_string --match_string="mail_pass" --replace_string="" --target_file="$cf"
 
 #=================================================
 # STORE THE CONFIG FILE CHECKSUM
@@ -256,7 +227,7 @@ ynh_replace_string --match_string="match_string" --replace_string="replace_strin
 ### you can make a backup of this file before modifying it again if the admin had modified it.
 
 # Calculate and store the config file checksum into the app settings
-ynh_store_file_checksum --file="$final_path/CONFIG_FILE"
+ynh_store_file_checksum --file="$cf"
 
 #=================================================
 # GENERIC FINALIZATION
@@ -299,7 +270,7 @@ ynh_use_logrotate
 ###		- Remove the section "REMOVE SERVICE FROM ADMIN PANEL" in the remove script
 ###		- As well as the section "INTEGRATE SERVICE IN YUNOHOST" in the restore script
 
-yunohost service add $app --description "A short description of the app" --log "/var/log/$app/$app.log"
+yunohost service add $app --description "Wallabag Kindle Consumer" --log "/var/log/$app/$app.log"
 
 ### Additional options starting with 3.8:
 ###

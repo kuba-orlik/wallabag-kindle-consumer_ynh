@@ -1,6 +1,6 @@
-SOURCE_URL=url of app's source
-SOURCE_SUM=sha256 checksum
+SOURCE_URL=https://github.com/janLo/wallabag-kindle-consumer/archive/master.zip
+SOURCE_SUM=e38be6e05ba9606ac7918c66bf4796854eb1b052c8494dfbfdbbf64b0ae5f847
 SOURCE_SUM_PRG=sha256sum
-SOURCE_FORMAT=tar.gz
+SOURCE_FORMAT=zip
 SOURCE_IN_SUBDIR=true
-SOURCE_FILENAME=
+SOURCE_FILENAME=master.zip
